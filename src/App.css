@@ -49,6 +49,7 @@ body {
   position: relative;
   display: flex;
   gap: 10px;
+  flex-direction: column;
 }
 
 .connect-wallet button {
@@ -217,5 +218,9 @@ main {
 
   .invalid-text {
     font-size: 1vw;
+  }
+
+  .connect-wallet {
+    flex-direction: row;
   }
 }
