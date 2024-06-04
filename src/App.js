@@ -18,7 +18,6 @@ const App = () => {
   const [showCommit, setShowCommit] = useState(true);
   const [disableCommit, setDisableCommit] = useState(false);
   const [disableRegister, setDisableRegister] = useState(false);
-
   const [resolverAddress, setResolverAddress] = useState('');
   const [edxRegistrarControllerAddress, setEdxRegistrarControllerAddress] =
     useState('');
@@ -77,10 +76,6 @@ const App = () => {
     }
   };
 
-  useEffect(() => {
-    fetchENSName();
-  }, [walletAddress, showRegister]);
-
   const fetchAddress = async (search) => {
     const node = ethers.utils.namehash(search + '.edx');
     const resolverContract = new ethers.Contract(
@@ -96,6 +91,104 @@ const App = () => {
     }
   };
 
+  const handleCommit = async (domainName) => {
+    try {
+      const ownerAddress = await fetchAddress(domainName);
+      if (ownerAddress !== ethers.constants.AddressZero) {
+        setErrors({
+          domainName: `Domain already registered by: ${ownerAddress}`,
+        });
+      } else {
+        console.log('Domain is available, committing...');
+      }
+
+      const signer = provider.getSigner();
+      const edxReg = new ethers.Contract(
+        edxRegistrarControllerAddress,
+        edxRegistrarControllerAbi.abi,
+        signer
+      );
+      const tx = await edxReg.makeCommitment(
+        values,
+        walletAddress,
+        31536000,
+        ethers.utils.formatBytes32String(''),
+        resolverAddress,
+        [],
+        true,
+        0
+      );
+      setDisableCommit(true);
+
+      const tx2 = await edxReg.commit(tx);
+      setDisableCommit(true);
+      await tx2.wait();
+      setMessage(
+        'Commitment Successful. Please wait 60 seconds for registration.'
+      );
+
+      setTimeout(() => {
+        setShowRegister(true);
+        setDisableRegister(false);
+        setShowCommit(false);
+        setMessage('Register now...');
+      }, 62000);
+    } catch (error) {
+      setErrors({
+        domainName: 'Error while committing. Please try again',
+      });
+      setShowRegister(false);
+    }
+  };
+
+  const handleRegister = async (domainName) => {
+    const node = ethers.utils.namehash(domainName + '.edx');
+    const signer = provider.getSigner();
+    const edxReg = new ethers.Contract(
+      edxRegistrarControllerAddress,
+      edxRegistrarControllerAbi.abi,
+      signer
+    );
+    const resolver = new ethers.Contract(
+      resolverAddress,
+      PublicResolverAbi.abi,
+      signer
+    );
+    const price = await edxReg.rentPrice(domainName, 31536000);
+    const part = price.toString().split(',');
+    const PRICE = part[0];
+
+    try {
+      const tx3 = await edxReg.register(
+        domainName,
+        walletAddress,
+        31536000,
+        ethers.utils.formatBytes32String(''),
+        resolverAddress,
+        [],
+        true,
+        0,
+        { value: PRICE, gasLimit: 1000000, gasPrice: 1000000000 }
+      );
+      setMessage('Registration in progress...');
+      setDisableRegister(true);
+      await tx3.wait();
+
+      const tx4 = await resolver['setAddr(bytes32,address)'](
+        node,
+        walletAddress.toLowerCase()
+      );
+      await tx4.wait();
+
+      setMessage('Registration Successful.. !');
+      setShowRegister(false);
+      setShowCommit(true);
+      setDisableCommit(false);
+    } catch (error) {
+      setMessage('Error occurred while registering.. Try again later');
+    }
+  };
+
   const formik = useFormik({
     initialValues: {
       domainName: '',
@@ -108,101 +201,11 @@ const App = () => {
         .trim(),
     }),
     onSubmit: async (values) => {
+      const domainName = values?.domainName;
       if (showCommit) {
-        try {
-          const ownerAddress = await fetchAddress(values?.domainName);
-          if (ownerAddress !== ethers.constants.AddressZero) {
-            setErrors({
-              domainName: `Domain already registered by: ${ownerAddress}`,
-            });
-          } else {
-            console.log('Domain is available, committing...');
-          }
-
-          const signer = provider.getSigner();
-          const edxReg = new ethers.Contract(
-            edxRegistrarControllerAddress,
-            edxRegistrarControllerAbi.abi,
-            signer
-          );
-          const tx = await edxReg.makeCommitment(
-            values,
-            walletAddress,
-            31536000,
-            ethers.utils.formatBytes32String(''),
-            resolverAddress,
-            [],
-            true,
-            0
-          );
-          setDisableCommit(true);
-
-          const tx2 = await edxReg.commit(tx);
-          setDisableCommit(true);
-          await tx2.wait();
-          setMessage(
-            'Commitment Successful. Please wait 60 seconds for registration.'
-          );
-
-          setTimeout(() => {
-            setShowRegister(true);
-            setDisableRegister(false);
-            setShowCommit(false);
-            setMessage('Register now...');
-          }, 62000);
-
-        } catch (error) {
-          setErrors({
-            domainName: 'Error while committing. Please try again',
-          });
-          setShowRegister(false);
-        }
+        handleCommit(domainName);
       } else if (showRegister) {
-        const node = ethers.utils.namehash(values?.domainName + '.edx');
-        const signer = provider.getSigner();
-        const edxReg = new ethers.Contract(
-          edxRegistrarControllerAddress,
-          edxRegistrarControllerAbi.abi,
-          signer
-        );
-        const resolver = new ethers.Contract(
-          resolverAddress,
-          PublicResolverAbi.abi,
-          signer
-        );
-        const price = await edxReg.rentPrice(values?.domainName, 31536000);
-        const part = price.toString().split(',');
-        const PRICE = part[0];
-
-        try {
-          const tx3 = await edxReg.register(
-            values?.domainName,
-            walletAddress,
-            31536000,
-            ethers.utils.formatBytes32String(''),
-            resolverAddress,
-            [],
-            true,
-            0,
-            { value: PRICE, gasLimit: 1000000, gasPrice: 1000000000 }
-          );
-          setMessage('Registration in progress...');
-          setDisableRegister(true);
-          await tx3.wait();
-
-          const tx4 = await resolver['setAddr(bytes32,address)'](
-            node,
-            walletAddress.toLowerCase()
-          );
-          await tx4.wait();
-
-          setMessage('Registration Successful.. !');
-          setShowRegister(false);
-          setShowCommit(true);
-          setDisableCommit(false);
-        } catch (error) {
-          setMessage('Error occurred while registering.. Try again later');
-        }
+        handleRegister(domainName);
       }
     },
   });
@@ -218,10 +221,13 @@ const App = () => {
   } = formik;
 
   const handleDomainNameChange = (e) => {
-    const inputValue = e.target.value;
-    const sanitizedValue = inputValue.replace(/[^\w]/g, '');
-    setFieldValue('domainName', sanitizedValue);
+    const inputValue = e.target.value.replace(/[^\w]/g, '');
+    setFieldValue('domainName', inputValue);
   };
+
+  useEffect(() => {
+    fetchENSName();
+  }, [walletAddress, showRegister]);
 
   return (
     <div className="container min-safe">
@@ -236,8 +242,9 @@ const App = () => {
               {isConnected && network && <button>{network}</button>}
               {isConnected ? (
                 <button onClick={connectWallet}>
-                  {isConnected && ensName && <p className="name">{ensName}</p>}
-                  {!ensName && (
+                  {ensName ? (
+                    <p className="name">{ensName}</p>
+                  ) : (
                     <p className="name">
                       {walletAddress.slice(0, 6)}..{walletAddress.slice(-4)}
                     </p>
