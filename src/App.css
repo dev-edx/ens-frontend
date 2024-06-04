@@ -212,9 +212,9 @@ main {
     gap: 1.5rem;
   }
 
-  .MuiTextField-root {
+  /* .MuiTextField-root {
     width: 25vw !important;
-  }
+  } */
 
   .invalid-text {
     font-size: 1vw;

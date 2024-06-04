@@ -66,7 +66,7 @@ const App = () => {
       const node = ethers.utils.namehash(reverseName);
       const resolverContract = new ethers.Contract(
         resolverAddress,
-        PublicResolverAbi.abi,
+        PublicResolverAbi,
         provider
       );
       const ensName_ = await resolverContract.name(node);
@@ -80,7 +80,7 @@ const App = () => {
     const node = ethers.utils.namehash(search + '.edx');
     const resolverContract = new ethers.Contract(
       resolverAddress,
-      PublicResolverAbi.abi,
+      PublicResolverAbi,
       provider
     );
     let owner = await resolverContract['addr(bytes32)'](node);
@@ -98,6 +98,7 @@ const App = () => {
         setErrors({
           domainName: `Domain already registered by: ${ownerAddress}`,
         });
+        return;
       } else {
         console.log('Domain is available, committing...');
       }
@@ -105,11 +106,11 @@ const App = () => {
       const signer = provider.getSigner();
       const edxReg = new ethers.Contract(
         edxRegistrarControllerAddress,
-        edxRegistrarControllerAbi.abi,
+        edxRegistrarControllerAbi,
         signer
       );
       const tx = await edxReg.makeCommitment(
-        values,
+        domainName,
         walletAddress,
         31536000,
         ethers.utils.formatBytes32String(''),
@@ -133,6 +134,7 @@ const App = () => {
         setShowCommit(false);
         setMessage('Register now...');
       }, 62000);
+
     } catch (error) {
       setErrors({
         domainName: 'Error while committing. Please try again',
@@ -146,12 +148,12 @@ const App = () => {
     const signer = provider.getSigner();
     const edxReg = new ethers.Contract(
       edxRegistrarControllerAddress,
-      edxRegistrarControllerAbi.abi,
+      edxRegistrarControllerAbi,
       signer
     );
     const resolver = new ethers.Contract(
       resolverAddress,
-      PublicResolverAbi.abi,
+      PublicResolverAbi,
       signer
     );
     const price = await edxReg.rentPrice(domainName, 31536000);
@@ -176,7 +178,8 @@ const App = () => {
 
       const tx4 = await resolver['setAddr(bytes32,address)'](
         node,
-        walletAddress.toLowerCase()
+        walletAddress.toLowerCase(),
+        { gasLimit: 1000000, gasPrice: 1000000000 }
       );
       await tx4.wait();
 
@@ -201,6 +204,7 @@ const App = () => {
         .trim(),
     }),
     onSubmit: async (values) => {
+      setMessage('');
       const domainName = values?.domainName;
       if (showCommit) {
         handleCommit(domainName);
@@ -233,13 +237,22 @@ const App = () => {
     <div className="container min-safe">
       <header id="header">
         <div className="header-main">
-          <img
-            src="https://edexa-general.s3.ap-south-1.amazonaws.com/logo.svg"
-            alt="edeXa Logo"
-          />
+          {navigator.userAgentData.mobile ? (
+            <img
+              src="https://edexa-general.s3.ap-south-1.amazonaws.com/XLogo.png"
+              alt="edeXa Logo"
+              loading="lazy"
+            />
+          ) : (
+            <img
+              src="https://edexa-general.s3.ap-south-1.amazonaws.com/logo.svg"
+              alt="edeXa Logo"
+              loading="lazy"
+            />
+          )}
           <div className="wallet-button">
             <div className="connect-wallet">
-              {isConnected && network && <button>{network}</button>}
+              {!navigator.userAgentData.mobile && isConnected && network && <button>{network}</button>}
               {isConnected ? (
                 <button onClick={connectWallet}>
                   {ensName ? (
